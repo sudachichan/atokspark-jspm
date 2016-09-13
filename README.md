@@ -1,0 +1,28 @@
+# atokspark-jspm
+
+node.js で動作する ATOK Spark プラグインを管理するプラグインです。
+
+## 使い方の例
+
+`jspm:` と入力すると、インストール済みのプラグイン一覧を表示します。
+`jspm:i:sudachichan/atokspark-jsplugin-sample:` と入力すると、 http://github.com/sudachichan/atokspark-jsplugin-sample.git がインストールされます。
+`jspm:u:atokspark-jsplugin-sample` と入力すると、同プラグインがアンインストールされます。
+
+今のところ plugin.lst の管理は行っていません。手動で管理する必要があります。将来的には plugin.lst を都度編集する必要がなくなる予定です。
+
+## How to run
+
+以下のコマンドでエラーが出なければ動作するはずです。(まだ動作していません。)
+```
+$ git clone https://github.com/sudachichan/atokspark-jspm.git
+$ cd atokspark-jspm
+$ npm update
+$ npm run test
+```
+
+なお、 ATOK Spark の plugin.lst には以下のように指定してください。(Mac, nodebrew で node.js をインストールしている場合の例)
+```
+/Users/YOUR_ACCOUNT/.nodebrew/current/bin/node PATH/TO/jspm.js
+```
+- `YOUR_ACCOUNT`: あなたのユーザ名
+- `PATH/TO/jspm.js`: jspm.js がチェックアウトされたパス

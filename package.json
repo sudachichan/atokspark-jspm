@@ -1,0 +1,23 @@
+{
+  "name": "atokspark-jspm",
+  "version": "1.0.0",
+  "description": "コマンドの実行結果を入力する ATOK Spark プラグインです。",
+  "main": "jspm.js",
+  "scripts": {
+    "test": "test_plugin test_jspm.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sudachichan/atokspark-jspm.git"
+  },
+  "author": "sudachichan",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/sudachichan/atokspark-jspm/issues"
+  },
+  "homepage": "https://github.com/sudachichan/atokspark-jspm#readme",
+  "dependencies": {
+    "atokspark-jsplugin": "git://github.com/sudachichan/atokspark-jsplugin.git"
+  },
+  "devDependencies": {}
+}

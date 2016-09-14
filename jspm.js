@@ -151,6 +151,9 @@ class PluginManager {
         const deps = JSON.parse(s).dependencies;
         var items = [];
         for (var key of Object.keys(deps)) {
+            if (nonPluginModules.indexOf(key) >= 0) {
+                continue;
+            }
             items.push(`<tr><td>${key}</td><td>${deps[key].version}</td></tr>`);
         }
         return `<h2>${title}</h2>

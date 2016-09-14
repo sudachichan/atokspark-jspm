@@ -33,8 +33,9 @@ const jspmCSS = `
 // FIXME: 現状は 1 node.js プラグイン毎に 1 node.js プロセスを立ち上げるのでスケールしません。
 // 将来的には node.js プラグインフレームワークを変更して、単一 node.js プロセスで駆動する予定です。
 class PluginHost {
-    constructor(name) {
+    constructor(name, version) {
         this.name = name;
+        this.version = version;
         const pkgJson = JSON.parse(fs.readFileSync(`${__dirname}/node_modules/${this.name}/package.json`, 'utf8'));
         this.jsName = `${__dirname}/node_modules/${this.name}/${pkgJson.main}`;
     }
@@ -81,10 +82,10 @@ class PluginHost {
 const nonPluginModules = ['atokspark-jsplugin', 'juice'];
 class PluginManager {
     constructor() {
-        this.runnings = [];
+        this.plugins = [];
     }
     ensurePluginsStarted(ready) {
-        if (this.runnings && this.runnings.length > 0) {
+        if (this.plugins && this.plugins.length > 0) {
             // 起動済み
             ready();
             return;
@@ -96,41 +97,41 @@ class PluginManager {
                     // TODO: プラグインでないモジュールだった場合の処理はもう少し手厚くやる必要あり
                     continue;
                 }
-                const plugin = new PluginHost(name);
-                this.runnings.push(plugin);
+                const plugin = new PluginHost(name, deps[name].version);
+                this.plugins.push(plugin);
                 // console.log(`${plugin.name} created.`);
-                // console.log(this.runnings);
+                // console.log(this.plugins);
             }
-            if (this.runnings.length < 1) {
+            if (this.plugins.length < 1) {
                 // 1つもないが、制御は渡す。
                 ready();
                 return;
             }
             const acked = [];
-            for (const plugin of this.runnings) {
+            for (const plugin of this.plugins) {
                 // console.log(plugin);
                 plugin.start((thePlugin) => {
                     // console.log(`${thePlugin.name} started.`);
                     acked.push(thePlugin);
-                    if (acked.length === this.runnings.length) {
+                    if (acked.length === this.plugins.length) {
                         ready();
                     }
                 });
             }
         });
     }
-    stopAllPlugins() {
-        for (const plugin of this.runnings) {
+    stopPlugins() {
+        for (const plugin of this.plugins) {
             plugin.stop();
         }
-        this.runnings = [];
+        this.plugins = [];
     }
     restartPlugins(ready) {
-        this.stopAllPlugins();
+        this.stopPlugins();
         this.ensurePluginsStarted(ready);
     }
-    isRunning(name) {
-        for (const item of this.runnings) {
+    contains(name) {
+        for (const item of this.plugins) {
             if (item.name === name) {
                 return true;
             }
@@ -141,26 +142,16 @@ class PluginManager {
         if (!message) {
             message = '';
         }
-        this.npm('list --json', (error, stdout, stderr) => {
-            const list = this.renderJSON(stdout, 'プラグイン一覧');
-            callback(this.wrap(`${message}
-                                ${list}`));
-        });
-    }
-    renderJSON(s, title) {
-        const deps = JSON.parse(s).dependencies;
-        const items = [];
-        for (const key of Object.keys(deps)) {
-            if (nonPluginModules.indexOf(key) >= 0) {
-                continue;
-            }
-            items.push(`<tr><td>${key}</td><td>${deps[key].version}</td></tr>`);
+        const rows = [];
+        for (const plugin of this.plugins) {
+            rows.push(`<tr><td>${plugin.name}</td><td>${plugin.version}</td></tr>`);
         }
-        return `<h2>${title}</h2>
-                <table>
-                <tr><th>プラグイン名</th><th>バージョン</th></tr>
-                ${items.join('\n')}
-                </table>`;
+        callback(this.wrap(`${message}
+                            <h2>プラグイン一覧</h2>
+                            <table>
+                            <tr><th>プラグイン名</th><th>バージョン</th></tr>
+                            ${rows.join('\n')}
+                            </table>`));
     }
     install(plugin, callback) {
         if (plugin.indexOf('/') < 0) {
@@ -216,11 +207,11 @@ class PluginManager {
             this.list(`<h4>プラグインマネージャの動作に必要なため、${plugin}をアンインストールできません。</h4>`, callback);
             return;
         }
-        if (!this.isRunning(plugin)) {
+        if (!this.contains(plugin)) {
             onError();
             return;
         }
-        this.stopAllPlugins();
+        this.stopPlugins();
         this.npm(`uninstall --json --save ${plugin}`, (error, stdout, stderr) => {
             if (error) {
                 callback(this.wrap(`<pre>${error}</pre>`))
@@ -294,13 +285,13 @@ jspmPlugin.on('check', (text, callback) => {
         }
 
         // console.log('OK');
-        if (pluginManager.runnings.length === 0) {
+        if (pluginManager.plugins.length === 0) {
             callback(null);
             return;
         }
-        // console.log(pluginManager.runnings);
+        // console.log(pluginManager.plugins);
         let handled = false;
-        for (const plugin of pluginManager.runnings) {
+        for (const plugin of pluginManager.plugins) {
             // console.log(`start checking on ${plugin.name}`);
             plugin.check(text, (thePlugin, result) => {
                 // console.log(`${thePlugin.name} checked`);
@@ -322,7 +313,7 @@ jspmPlugin.on('check', (text, callback) => {
                         });
                     })]);
                     handled = true;
-                } else if (pluginManager.runnings.length === checked.length) {
+                } else if (pluginManager.plugins.length === checked.length) {
                     // 他に結果を待っているやつがいなければ、結果なしを返す。
                     // console.log(`from ${thePlugin.name}`);
                     callback(null);

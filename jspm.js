@@ -207,24 +207,83 @@ class PluginManager {
     }
 }
 
-const MAX_AWAITINGS = 5;
-const awaitings = [];
+const MAX_RESERVATIONS = 5;
+const reservations = [];
 let index = 0;
 
-function matchRegex(text, regex) {
-    var matches = new RegExp(regex).exec(text);
-    if (matches && matches[0] === text) {
-        return matches;
-    }
-    return null;
+function reserveGetText(func) {
+    reservations[index] = func;
+    var token = index;
+    index = (index + 1) % MAX_RESERVATIONS;
+    return token;
 }
 
-function pushFunc(func) {
-    awaitings[index] = func;
-    var pushed = index;
-    index = (index + 1) % MAX_AWAITINGS;
-    return pushed;
-}
+var jspmViews = {
+    'jspm:': function (callback) {
+        listPlugins(callback, null);
+    },
+    'jspm:i:(.*):': function (callback, matches) {
+        var plugin = matches[1].replace(':', '/');
+        if (plugin.indexOf('/') < 0) {
+            // foo/bar 形式でない場合は npm が応答を返さないので先回りしてエラーにする
+            callback(wrap(`<h4 ${style.h4}>${plugin}はインストールできません。"[githubユーザ名]/[githubプロジェクト名]"の形式を指定してください。</h4>`));
+        }
+        var url = `https://github.com/${plugin}.git`;
+        // console.log(url);
+        npm(`install --json --save ${url}`, (error, stdout, stderr) => {
+            if (error) {
+                callback(wrap(`<h4 ${style.h4}>${plugin}のインストールに失敗しました。</h4>
+                                <ul>
+                                    <li>プラグイン名が間違っていませんか？
+                                        <ul>
+                                            <li>https://github.com/${plugin} を確認してください。</li>
+                                        </ul>
+                                    </li>
+                                    <li>ネットワークに接続していますか？</li>
+                                    <li>プロキシ設定は行われていますか？
+                                        <ul>
+                                            <li>Macでプラグインマネージャ(jspm)のみにプロキシ設定する場合はplugin.lstでhttps_proxy環境変数を設定してコマンドを記述してください。</li>
+                                            <li>例) https_proxy=http://proxy.server:8080 path/to/node path/to/jspm.js</li>
+                                        </ul>
+                                    </li>
+                                </ul>
+                                <pre>${error}</pre>
+                                <ul>
+                                    <li>${config.env.https_proxy}</li>
+                                </ul>`))
+                return;
+            }
+            pluginManager.restartPlugins(() => {
+                listPlugins(callback, `<h4 ${style.h4}>${plugin}をインストールしました。</h4>`);
+            });
+        });
+    },
+    'jspm:u:(.*):': function (callback, matches) {
+        var plugin = matches[1];
+        // console.log(url);
+        if (plugin === 'atokspark-jsplugin') {
+            listPlugins(callback, `<h4 ${style.h4}>プラグインマネージャの動作に必要なため、${plugin}をアンインストールできません。</h4>`);
+            return;
+        }
+        if (!pluginManager.isRunning(plugin)) {
+            listPlugins(callback, `<h4 ${style.h4}>${plugin}はインストールされていません。</h4>`);
+            return;
+        }
+        pluginManager.stopAllPlugins();
+        npm(`uninstall --json --save ${plugin}`, (error, stdout, stderr) => {
+            if (error) {
+                callback(wrap(`<pre>${error}</pre>
+                            <ul>
+                                <li>${config.env.https_proxy}</li>
+                            </ul>`))
+                return;
+            }
+            pluginManager.restartPlugins(() => {
+                listPlugins(callback, `<h4 ${style.h4}>${plugin}をアンインストールしました。</h4>`);
+            });
+        });
+    }
+};
 
 var checked = [];
 var pluginManager = new PluginManager();
@@ -232,81 +291,15 @@ const jspmPlugin = new Plugin().run();
 jspmPlugin.on('check', (text, callback) => {
     checked = [];
     pluginManager.ensurePluginsStarted(() => {
-        var matches = matchRegex(text, 'jspm:');
-        if (matches) {
-            callback(['VIEW', pushFunc((theCallback) => {
-                listPlugins(theCallback, null);
-            })]);
-            return;
-        }
-        var matches = matchRegex(text, 'jspm:i:(.*):');
-        if (matches) {
-            callback(['VIEW', pushFunc((theCallback) => {
-                var plugin = matches[1].replace(':', '/');
-                if (plugin.indexOf('/') < 0) {
-                    // foo/bar 形式でない場合は npm が応答を返さないので先回りしてエラーにする
-                    theCallback(wrap(`<h4 ${style.h4}>${plugin}はインストールできません。"[githubユーザ名]/[githubプロジェクト名]"の形式を指定してください。</h4>`));
-                }
-                var url = `https://github.com/${plugin}.git`;
-                // console.log(url);
-                npm(`install --json --save ${url}`, (error, stdout, stderr) => {
-                    if (error) {
-                        theCallback(wrap(`<h4 ${style.h4}>${plugin}のインストールに失敗しました。</h4>
-                                        <ul>
-                                            <li>プラグイン名が間違っていませんか？
-                                                <ul>
-                                                    <li>https://github.com/${plugin} を確認してください。</li>
-                                                </ul>
-                                            </li>
-                                            <li>ネットワークに接続していますか？</li>
-                                            <li>プロキシ設定は行われていますか？
-                                                <ul>
-                                                    <li>Macでプラグインマネージャ(jspm)のみにプロキシ設定する場合はplugin.lstでhttps_proxy環境変数を設定してコマンドを記述してください。</li>
-                                                    <li>例) https_proxy=http://proxy.server:8080 path/to/node path/to/jspm.js</li>
-                                                </ul>
-                                            </li>
-                                        </ul>
-                                        <pre>${error}</pre>
-                                        <ul>
-                                            <li>${config.env.https_proxy}</li>
-                                        </ul>`))
-                        return;
-                    }
-                    pluginManager.restartPlugins(() => {
-                        listPlugins(theCallback, `<h4 ${style.h4}>${plugin}をインストールしました。</h4>`);
-                    });
-                });
-            })]);
-            return;
-        }
-        var matches = matchRegex(text, 'jspm:u:(.*):');
-        if (matches) {
-            callback(['VIEW', pushFunc((theCallback) => {
-                var plugin = matches[1];
-                // console.log(url);
-                if (plugin === 'atokspark-jsplugin') {
-                    listPlugins(theCallback, `<h4 ${style.h4}>プラグインマネージャの動作に必要なため、${plugin}をアンインストールできません。</h4>`);
-                    return;
-                }
-                if (!pluginManager.isRunning(plugin)) {
-                    listPlugins(theCallback, `<h4 ${style.h4}>${plugin}はインストールされていません。</h4>`);
-                    return;
-                }
-                pluginManager.stopAllPlugins();
-                npm(`uninstall --json --save ${plugin}`, (error, stdout, stderr) => {
-                    if (error) {
-                        theCallback(wrap(`<pre>${error}</pre>
-                                    <ul>
-                                        <li>${config.env.https_proxy}</li>
-                                    </ul>`))
-                        return;
-                    }
-                    pluginManager.restartPlugins(() => {
-                        listPlugins(theCallback, `<h4 ${style.h4}>${plugin}をアンインストールしました。</h4>`);
-                    });
-                });
-            })]);
-            return;
+        for (var regex of Object.keys(jspmViews)) {
+            var matches = new RegExp(regex).exec(text);
+            if (matches && matches[0] === text) {
+                var view = jspmViews[regex];
+                callback(['VIEW', reserveGetText((theCallback) => {
+                    view(theCallback, matches);
+                })]);
+                return;
+            }
         }
 
         // console.log('OK');
@@ -330,15 +323,13 @@ jspmPlugin.on('check', (text, callback) => {
                     // console.log(`from ${thePlugin.name}`);
                     var pair = result.split(' ');
                     var token = parseInt(pair[1]);
-                    var pushed = pushFunc((theCallback) => {
+                    callback([pair[0], reserveGetText((theCallback) => {
                         thePlugin.gettext(token, (thePlugin, text) => {
                             var words = text.split(' ');
                             words.shift(); // 先頭の TEXT を外している
                             theCallback(words.join(' '));
                         });
-                    });
-                        // [thePlugin, token];
-                    callback([pair[0], pushed]);
+                    })]);
                     handled = true;
                 } else if (pluginManager.runnings.length === checked.length) {
                     // 他に結果を待っているやつがいなければ、結果なしを返す。
@@ -350,9 +341,9 @@ jspmPlugin.on('check', (text, callback) => {
     });
 });
 jspmPlugin.on('gettext', (token, callback) => {
-    if (token < 0 || MAX_AWAITINGS < token) {
+    if (token < 0 || MAX_RESERVATIONS < token) {
         throw "無効な token です";
     }
-    const func = awaitings[token];
-    func(callback);
+    const reservedGetText = reservations[token];
+    reservedGetText(callback);
 });

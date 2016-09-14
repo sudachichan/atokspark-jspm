@@ -167,10 +167,10 @@ class PluginManager {
             // foo/bar 形式でない場合は npm が応答を返さないので先回りしてエラーにする
             callback(this.wrap(`<h4>${plugin}はインストールできません。"[githubユーザ名]/[githubプロジェクト名]"の形式を指定してください。</h4>`));
         }
-        var url = `https://github.com/${plugin}.git`;
-        // console.log(url);
-        this.npm(`install --json --save ${url}`, (error, stdout, stderr) => {
-            if (error) {
+        this.tryInstallForName(plugin, callback, () => {
+            var parts = plugin.split('/');
+            var atoksparkPretended = [parts[0], `atokspark-${parts[1]}`].join('/'); 
+            this.tryInstallForName(atoksparkPretended, callback, (error) => {
                 callback(this.wrap(`<h4>${plugin}のインストールに失敗しました。</h4>
                                 <ul>
                                     <li>プラグイン名が間違っていませんか？
@@ -187,6 +187,15 @@ class PluginManager {
                                     </li>
                                 </ul>
                                 <pre>${error}</pre>`))
+            });
+        })
+    }
+    tryInstallForName(plugin, callback, onError) {
+        var url = `https://github.com/${plugin}.git`;
+        // console.log(url);
+        this.npm(`install --json --save ${url}`, (error, stdout, stderr) => {
+            if (error) {
+                onError(error);
                 return;
             }
             this.restartPlugins(() => {

@@ -299,7 +299,7 @@ jspmPlugin.on('check', (text, callback) => {
             return;
         }
         // console.log(pluginManager.runnings);
-        var handled = false;
+        let handled = false;
         for (const plugin of pluginManager.runnings) {
             // console.log(`start checking on ${plugin.name}`);
             plugin.check(text, (thePlugin, result) => {

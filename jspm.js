@@ -188,7 +188,7 @@ class PluginManager {
                                 </ul>
                                 <pre>${error}</pre>`))
             });
-        })
+        });
     }
     tryInstallForName(plugin, callback, onError) {
         var url = `https://github.com/${plugin}.git`;
@@ -204,12 +204,20 @@ class PluginManager {
         });
     }
     uninstall(plugin, callback) {
+        this.tryUninstallForName(plugin, callback, () => {
+            const atoksparkPretended = `atokspark-${plugin}`;
+            this.tryUninstallForName(atoksparkPretended, callback, () => {
+                this.list(`<h4>${plugin}はインストールされていません。</h4>`, callback);
+            });
+        });
+    }
+    tryUninstallForName(plugin, callback, onError) {
         if (nonPluginModules.indexOf(plugin) >= 0) {
             this.list(`<h4>プラグインマネージャの動作に必要なため、${plugin}をアンインストールできません。</h4>`, callback);
             return;
         }
         if (!this.isRunning(plugin)) {
-            this.list(`<h4>${plugin}はインストールされていません。</h4>`, callback);
+            onError();
             return;
         }
         this.stopAllPlugins();

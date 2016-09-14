@@ -147,66 +147,69 @@ class PluginHost {
     }
 }
 
-var runnings = [];
+class PluginManager {
+    constructor() {
+        this.runnings = [];
+    }
+    ensurePluginsStarted(ready) {
+        if (this.runnings && this.runnings.length > 0) {
+            // 起動済み
+            ready();
+            return;
+        }
+        npm('list --json', (error, stdout, stderr) => {
+            var deps = JSON.parse(stdout).dependencies;
+            for (var name of Object.keys(deps)) {
+                if (name === 'atokspark-jsplugin') {
+                    // TODO: プラグインでないモジュールだった場合の処理はもう少し手厚くやる必要あり
+                    continue;
+                }
+                var plugin = new PluginHost(name);
+                this.runnings.push(plugin);
+                // console.log(`${plugin.name} created.`);
+                // console.log(this.runnings);
+            }
+            if (this.runnings.length < 1) {
+                // 1つもないが、制御は渡す。
+                ready();
+                return;
+            }
+            var acked = [];
+            for (var plugin of this.runnings) {
+                // console.log(plugin);
+                plugin.start((thePlugin) => {
+                    // console.log(`${thePlugin.name} started.`);
+                    acked.push(thePlugin);
+                    if (acked.length === this.runnings.length) {
+                        ready();
+                    }
+                });
+            }
+        });
+    }
+    stopAllPlugins() {
+        for (var plugin of this.runnings) {
+            plugin.stop();
+        }
+        this.runnings = [];
+    }
+    restartPlugins(ready) {
+        this.stopAllPlugins();
+        this.ensurePluginsStarted(ready);
+    }
+    isRunning(name) {
+        for (var item of this.runnings) {
+            if (item.name === name) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
 
 const MAX_AWAITINGS = 5;
 const awaitings = [];
 let index = 0;
-
-function ensurePluginsStarted(ready) {
-    if (runnings && runnings.length > 0) {
-        // 起動済み
-        ready();
-        return;
-    }
-    npm('list --json', (error, stdout, stderr) => {
-        var deps = JSON.parse(stdout).dependencies;
-        for (var name of Object.keys(deps)) {
-            if (name === 'atokspark-jsplugin') {
-                // TODO: プラグインでないモジュールだった場合の処理はもう少し手厚くやる必要あり
-                continue;
-            }
-            var plugin = new PluginHost(name);
-            runnings.push(plugin);
-            // console.log(`${plugin.name} created.`);
-            // console.log(runnings);
-        }
-        if (runnings.length < 1) {
-            // 1つもないが、制御は渡す。
-            ready();
-            return;
-        }
-        var acked = [];
-        for (var plugin of runnings) {
-            // console.log(plugin);
-            plugin.start(function (thePlugin) {
-                // console.log(`${thePlugin.name} started.`);
-                acked.push(thePlugin);
-                if (acked.length === runnings.length) {
-                    ready();
-                }
-            });
-        }
-    });
-}
-function stopAllPlugins() {
-    for (var plugin of runnings) {
-        plugin.stop();
-    }
-    runnings = [];
-}
-function restartPlugins(ready) {
-    stopAllPlugins();
-    ensurePluginsStarted(ready);
-}
-function isRunning(name) {
-    for (var item of runnings) {
-        if (item.name === name) {
-            return true;
-        }
-    }
-    return false;
-}
 
 function matchRegex(text, regex) {
     var matches = new RegExp(regex).exec(text);
@@ -224,10 +227,11 @@ function pushFunc(func) {
 }
 
 var checked = [];
-const pluginManager = new Plugin().run();
-pluginManager.on('check', (text, callback) => {
+var pluginManager = new PluginManager();
+const jspmPlugin = new Plugin().run();
+jspmPlugin.on('check', (text, callback) => {
     checked = [];
-    ensurePluginsStarted(() => {
+    pluginManager.ensurePluginsStarted(() => {
         var matches = matchRegex(text, 'jspm:');
         if (matches) {
             callback(['VIEW', pushFunc((theCallback) => {
@@ -268,7 +272,7 @@ pluginManager.on('check', (text, callback) => {
                                         </ul>`))
                         return;
                     }
-                    restartPlugins(() => {
+                    pluginManager.restartPlugins(() => {
                         listPlugins(theCallback, `<h4 ${style.h4}>${plugin}をインストールしました。</h4>`);
                     });
                 });
@@ -284,11 +288,11 @@ pluginManager.on('check', (text, callback) => {
                     listPlugins(theCallback, `<h4 ${style.h4}>プラグインマネージャの動作に必要なため、${plugin}をアンインストールできません。</h4>`);
                     return;
                 }
-                if (!isRunning(plugin)) {
+                if (!pluginManager.isRunning(plugin)) {
                     listPlugins(theCallback, `<h4 ${style.h4}>${plugin}はインストールされていません。</h4>`);
                     return;
                 }
-                stopAllPlugins();
+                pluginManager.stopAllPlugins();
                 npm(`uninstall --json --save ${plugin}`, (error, stdout, stderr) => {
                     if (error) {
                         theCallback(wrap(`<pre>${error}</pre>
@@ -297,7 +301,7 @@ pluginManager.on('check', (text, callback) => {
                                     </ul>`))
                         return;
                     }
-                    restartPlugins(() => {
+                    pluginManager.restartPlugins(() => {
                         listPlugins(theCallback, `<h4 ${style.h4}>${plugin}をアンインストールしました。</h4>`);
                     });
                 });
@@ -306,13 +310,13 @@ pluginManager.on('check', (text, callback) => {
         }
 
         // console.log('OK');
-        if (runnings.length === 0) {
+        if (pluginManager.runnings.length === 0) {
             callback(null);
             return;
         }
-        // console.log(runnings);
+        // console.log(pluginManager.runnings);
         var handled = false;
-        for (var plugin of runnings) {
+        for (var plugin of pluginManager.runnings) {
             // console.log(`start checking on ${plugin.name}`);
             plugin.check(text, (thePlugin, result) => {
                 // console.log(`${thePlugin.name} checked`);
@@ -336,7 +340,7 @@ pluginManager.on('check', (text, callback) => {
                         // [thePlugin, token];
                     callback([pair[0], pushed]);
                     handled = true;
-                } else if (runnings.length === checked.length) {
+                } else if (pluginManager.runnings.length === checked.length) {
                     // 他に結果を待っているやつがいなければ、結果なしを返す。
                     // console.log(`from ${thePlugin.name}`);
                     callback(null);
@@ -345,7 +349,7 @@ pluginManager.on('check', (text, callback) => {
         }
     });
 });
-pluginManager.on('gettext', (token, callback) => {
+jspmPlugin.on('gettext', (token, callback) => {
     if (token < 0 || MAX_AWAITINGS < token) {
         throw "無効な token です";
     }

@@ -4,62 +4,31 @@ const Plugin = require('atokspark-jsplugin');
 const child_process = require('child_process');
 const exec = child_process.exec;
 const fs = require('fs');
+const juice = require('juice');
 const path = require('path');
 
-var style = css({
-    body: {
-        backgroundColor: 'black',
-        color: 'white',
-        fontFamily: 'monospace',
-    },
-    h2: {
-        borderBottom: '1px solid #99ccff',
-    },
-    h4: {
-        backgroundColor: '#003366',
-        borderRadius: '0.5em',
-        padding: '1em',
-    },
-    th: {
-        backgroundColor: '#336699',
-        padding: '0.5em 1em',
-    },
-    td: {
-        backgroundColor: '#003366',
-        padding: '0.5em 1em',
-    },
-});
-function css(json) {
-    var converted = {};
-    for (var selector of Object.keys(json)) {
-        var props = [];
-        var rules = json[selector];
-        for (var key of Object.keys(rules)) {
-            var value = rules[key];
-            props.push(`${propName(key)}: ${propValue(value)}`);
-        }
-        converted[selector] = `style="${props.join('; ')}"`;
+var jspmCSS = `
+    body {
+        background-color: black;
+        color: white;
+        font-family: monospace;
     }
-    return converted;
-}
-function propName(key) {
-    var prop = '';
-    for (var i = 0; i < key.length; ++i) {
-        var char = key[i];
-        if ('A' <= char && char <= 'Z') {
-            prop += `-${char.toLowerCase()}`
-        } else {
-            prop += char;
-        }
+    h2 {
+        border-bottom: 1px solid #99ccff;
     }
-    return prop;
-}
-function propValue(value) {
-    if (value instanceof Number) {
-        value = `${value}px`;
+    h4 {
+        background-color: #003366;
+        border-radius: 0.5em;
+        padding: 1em;
     }
-    return value;
-}
+    th {
+        background-color: #336699;
+        padding: 0.5em 1em;
+    }
+    td {
+        background-color: #003366;
+        padding: 0.5em 1em;
+    }`;
 
 // FIXME: 現状は 1 node.js プラグイン毎に 1 node.js プロセスを立ち上げるのでスケールしません。
 // 将来的には node.js プラグインフレームワークを変更して、単一 node.js プロセスで駆動する予定です。
@@ -109,6 +78,7 @@ class PluginHost {
     }
 }
 
+const nonPluginModules = ['atokspark-jsplugin', 'juice'];
 class PluginManager {
     constructor() {
         this.runnings = [];
@@ -122,7 +92,7 @@ class PluginManager {
         this.npm('list --json', (error, stdout, stderr) => {
             var deps = JSON.parse(stdout).dependencies;
             for (var name of Object.keys(deps)) {
-                if (name === 'atokspark-jsplugin') {
+                if (nonPluginModules.indexOf(name) >= 0) {
                     // TODO: プラグインでないモジュールだった場合の処理はもう少し手厚くやる必要あり
                     continue;
                 }
@@ -173,32 +143,32 @@ class PluginManager {
         }
         this.npm('list --json', (error, stdout, stderr) => {
             var list = this.renderJSON(stdout, 'プラグイン一覧');
-            callback(`${message}
-            ${list}`);
+            callback(this.wrap(`${message}
+                                ${list}`));
         });
     }
     renderJSON(s, title) {
         const deps = JSON.parse(s).dependencies;
         var items = [];
         for (var key of Object.keys(deps)) {
-            items.push(`<tr><td ${style.td}>${key}</td><td ${style.td}>${deps[key].version}</td></tr>`);
+            items.push(`<tr><td>${key}</td><td>${deps[key].version}</td></tr>`);
         }
-        return this.wrap(`<h2 ${style.h2}>${title}</h2>
-                        <table>
-                        <tr><th ${style.th}>プラグイン名</th><th ${style.th}>バージョン</th></tr>
-                        ${items.join('\n')}
-                        </table>`);
+        return `<h2>${title}</h2>
+                <table>
+                <tr><th>プラグイン名</th><th>バージョン</th></tr>
+                ${items.join('\n')}
+                </table>`;
     }
     install(plugin, callback) {
         if (plugin.indexOf('/') < 0) {
             // foo/bar 形式でない場合は npm が応答を返さないので先回りしてエラーにする
-            callback(this.wrap(`<h4 ${style.h4}>${plugin}はインストールできません。"[githubユーザ名]/[githubプロジェクト名]"の形式を指定してください。</h4>`));
+            callback(this.wrap(`<h4>${plugin}はインストールできません。"[githubユーザ名]/[githubプロジェクト名]"の形式を指定してください。</h4>`));
         }
         var url = `https://github.com/${plugin}.git`;
         // console.log(url);
         this.npm(`install --json --save ${url}`, (error, stdout, stderr) => {
             if (error) {
-                callback(this.wrap(`<h4 ${style.h4}>${plugin}のインストールに失敗しました。</h4>
+                callback(this.wrap(`<h4>${plugin}のインストールに失敗しました。</h4>
                                 <ul>
                                     <li>プラグイン名が間違っていませんか？
                                         <ul>
@@ -217,17 +187,17 @@ class PluginManager {
                 return;
             }
             this.restartPlugins(() => {
-                this.list(`<h4 ${style.h4}>${plugin}をインストールしました。</h4>`, callback);
+                this.list(`<h4>${plugin}をインストールしました。</h4>`, callback);
             });
         });
     }
     uninstall(plugin, callback) {
-        if (plugin === 'atokspark-jsplugin') {
-            this.list(`<h4 ${style.h4}>プラグインマネージャの動作に必要なため、${plugin}をアンインストールできません。</h4>`, callback);
+        if (nonPluginModules.indexOf(plugin) >= 0) {
+            this.list(`<h4>プラグインマネージャの動作に必要なため、${plugin}をアンインストールできません。</h4>`, callback);
             return;
         }
         if (!this.isRunning(plugin)) {
-            this.list(`<h4 ${style.h4}>${plugin}はインストールされていません。</h4>`, callback);
+            this.list(`<h4>${plugin}はインストールされていません。</h4>`, callback);
             return;
         }
         this.stopAllPlugins();
@@ -237,7 +207,7 @@ class PluginManager {
                 return;
             }
             this.restartPlugins(() => {
-                this.list(`<h4 ${style.h4}>${plugin}をアンインストールしました。</h4>`, callback);
+                this.list(`<h4>${plugin}をアンインストールしました。</h4>`, callback);
             });
         });
     }
@@ -252,7 +222,10 @@ class PluginManager {
         }, callback);
     }
     wrap(content) {
-        return `<html xmlns="http://www.w3.org/1999/xhtml"><body ${style.body}>${content}</body></html>`;
+        return juice(`<html xmlns="http://www.w3.org/1999/xhtml"><body>${content}</body></html>`, {
+            extraCss: jspmCSS,
+            xmlMode: true,
+        });
     }
 }
 

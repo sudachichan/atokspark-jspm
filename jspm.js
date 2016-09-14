@@ -30,52 +30,33 @@ const jspmCSS = `
         padding: 0.5em 1em;
     }`;
 
-// FIXME: 現状は 1 node.js プラグイン毎に 1 node.js プロセスを立ち上げるのでスケールしません。
-// 将来的には node.js プラグインフレームワークを変更して、単一 node.js プロセスで駆動する予定です。
 class PluginHost {
     constructor(name, version) {
         this.name = name;
         this.version = version;
-        const pkgJson = JSON.parse(fs.readFileSync(`${__dirname}/node_modules/${this.name}/package.json`, 'utf8'));
-        this.jsName = `${__dirname}/node_modules/${this.name}/${pkgJson.main}`;
     }
     start(ready) {
-        this.child = child_process.fork(this.jsName, [], {
-            silent: true,
-        });
-        this.onText = (text) => {
-            // TODO: HELLO の確認に失敗した時の処理
-            if (text.indexOf('HELLO ') === 0) {
-                ready(this);
-            }
-        };
-        this.child.stdout.on('data', (data) => {
-            const text = '' + data;
-            const lines = text.split('\n');
-            lines.pop();
-            this.onText(lines.join('\n'));
-        });
+        this.module = require(this.name);
+        ready(this);
     }
     stop() {
-        this.child.kill();
     }
     check(text, callback) {
         // CHECK を発行
-        this.child.stdin.write(`CHECK ${text}\n`);
-        this.onText = (text) => {
-            // console.log(`checked: ${this.name}`);
-            // console.log(data);
-            // 単純に返せば良いはず
+        this.module.println = (text) => {
+            // console.log(text);
             callback(this, text);
         };
+        this.module.CHECK(text);
     }
     gettext(token, callback) {
+        // console.log(token);
         // GETTEXT を発行
-        this.child.stdin.write(`GETTEXT ${token}\n`);
-        this.onText = (text) => {
-            // 単純に返せば良いはず
+        this.module.println = (text) => {
+            // console.log(text);
             callback(this, text);
         };
+        this.module.GETTEXT(token);
     }
 }
 
@@ -269,7 +250,7 @@ const jspmViews = {
 };
 
 const pluginManager = new PluginManager();
-const jspmPlugin = new Plugin().run();
+const jspmPlugin = new Plugin();
 jspmPlugin.on('check', (text, callback) => {
     const checked = [];
     pluginManager.ensurePluginsStarted(() => {
@@ -329,3 +310,8 @@ jspmPlugin.on('gettext', (token, callback) => {
     const reservedGetText = reservations[token];
     reservedGetText(callback);
 });
+
+module.exports = jspmPlugin;
+if (require.main === module) {
+    jspmPlugin.run();
+}

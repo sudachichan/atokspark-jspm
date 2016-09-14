@@ -233,13 +233,16 @@ class PluginManager {
     }
     // private methods
     npm(args, callback) {
-        exec(`npm ${args}`, {
+        var config = {
             cwd: __dirname,
             env: {
                 'PATH': [path.dirname(process.execPath), process.env.PATH].join(':'),
-                'https_proxy': process.env.https_proxy,
             },
-        }, callback);
+        };
+        if (process.env.https_proxy) {
+            config.env['https_proxy'] = process.env.https_proxy;
+        }
+        exec(`npm ${args}`, config, callback);
     }
     wrap(content) {
         return juice(`<html xmlns="http://www.w3.org/1999/xhtml"><body>${content}</body></html>`, {

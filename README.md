@@ -8,7 +8,7 @@ node.js で動作する ATOK Spark プラグインを管理するプラグイン
 `jspm:i:sudachichan/atokspark-jsplugin-sample:` と入力すると、 http://github.com/sudachichan/atokspark-jsplugin-sample.git がインストールされます。
 `jspm:u:atokspark-jsplugin-sample` と入力すると、同プラグインがアンインストールされます。
 
-今のところ plugin.lst の管理は行っていません。手動で管理する必要があります。将来的には plugin.lst を都度編集する必要がなくなる予定です。
+このプラグインは、管理している JavaScript プラグインを自動的に実行します。 ATOK Spark の plugin.lst ファイルを都度編集する必要はありません。
 
 ## How to run
 

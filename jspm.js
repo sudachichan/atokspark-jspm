@@ -7,7 +7,7 @@ const fs = require('fs');
 const juice = require('juice');
 const path = require('path');
 
-var jspmCSS = `
+const jspmCSS = `
     body {
         background-color: black;
         color: white;
@@ -35,7 +35,7 @@ var jspmCSS = `
 class PluginHost {
     constructor(name) {
         this.name = name;
-        var pkgJson = JSON.parse(fs.readFileSync(`${__dirname}/node_modules/${this.name}/package.json`, 'utf8'));
+        const pkgJson = JSON.parse(fs.readFileSync(`${__dirname}/node_modules/${this.name}/package.json`, 'utf8'));
         this.jsName = `${__dirname}/node_modules/${this.name}/${pkgJson.main}`;
     }
     start(ready) {
@@ -49,8 +49,8 @@ class PluginHost {
             }
         };
         this.child.stdout.on('data', (data) => {
-            var text = '' + data;
-            var lines = text.split('\n');
+            const text = '' + data;
+            const lines = text.split('\n');
             lines.pop();
             this.onText(lines.join('\n'));
         });
@@ -90,13 +90,13 @@ class PluginManager {
             return;
         }
         this.npm('list --json', (error, stdout, stderr) => {
-            var deps = JSON.parse(stdout).dependencies;
-            for (var name of Object.keys(deps)) {
+            const deps = JSON.parse(stdout).dependencies;
+            for (const name of Object.keys(deps)) {
                 if (nonPluginModules.indexOf(name) >= 0) {
                     // TODO: プラグインでないモジュールだった場合の処理はもう少し手厚くやる必要あり
                     continue;
                 }
-                var plugin = new PluginHost(name);
+                const plugin = new PluginHost(name);
                 this.runnings.push(plugin);
                 // console.log(`${plugin.name} created.`);
                 // console.log(this.runnings);
@@ -106,8 +106,8 @@ class PluginManager {
                 ready();
                 return;
             }
-            var acked = [];
-            for (var plugin of this.runnings) {
+            const acked = [];
+            for (const plugin of this.runnings) {
                 // console.log(plugin);
                 plugin.start((thePlugin) => {
                     // console.log(`${thePlugin.name} started.`);
@@ -120,7 +120,7 @@ class PluginManager {
         });
     }
     stopAllPlugins() {
-        for (var plugin of this.runnings) {
+        for (const plugin of this.runnings) {
             plugin.stop();
         }
         this.runnings = [];
@@ -130,7 +130,7 @@ class PluginManager {
         this.ensurePluginsStarted(ready);
     }
     isRunning(name) {
-        for (var item of this.runnings) {
+        for (const item of this.runnings) {
             if (item.name === name) {
                 return true;
             }
@@ -142,15 +142,15 @@ class PluginManager {
             message = '';
         }
         this.npm('list --json', (error, stdout, stderr) => {
-            var list = this.renderJSON(stdout, 'プラグイン一覧');
+            const list = this.renderJSON(stdout, 'プラグイン一覧');
             callback(this.wrap(`${message}
                                 ${list}`));
         });
     }
     renderJSON(s, title) {
         const deps = JSON.parse(s).dependencies;
-        var items = [];
-        for (var key of Object.keys(deps)) {
+        const items = [];
+        for (const key of Object.keys(deps)) {
             if (nonPluginModules.indexOf(key) >= 0) {
                 continue;
             }
@@ -168,8 +168,8 @@ class PluginManager {
             callback(this.wrap(`<h4>${plugin}はインストールできません。"[githubユーザ名]/[githubプロジェクト名]"の形式を指定してください。</h4>`));
         }
         this.tryInstallForName(plugin, callback, () => {
-            var parts = plugin.split('/');
-            var atoksparkPretended = [parts[0], `atokspark-${parts[1]}`].join('/'); 
+            const parts = plugin.split('/');
+            const atoksparkPretended = [parts[0], `atokspark-${parts[1]}`].join('/'); 
             this.tryInstallForName(atoksparkPretended, callback, (error) => {
                 callback(this.wrap(`<h4>${plugin}のインストールに失敗しました。</h4>
                                 <ul>
@@ -191,7 +191,7 @@ class PluginManager {
         });
     }
     tryInstallForName(plugin, callback, onError) {
-        var url = `https://github.com/${plugin}.git`;
+        const url = `https://github.com/${plugin}.git`;
         // console.log(url);
         this.npm(`install --json --save ${url}`, (error, stdout, stderr) => {
             if (error) {
@@ -233,7 +233,7 @@ class PluginManager {
     }
     // private methods
     npm(args, callback) {
-        var config = {
+        const config = {
             cwd: __dirname,
             env: {
                 'PATH': [path.dirname(process.execPath), process.env.PATH].join(':'),
@@ -258,34 +258,34 @@ let index = 0;
 
 function reserveGetText(func) {
     reservations[index] = func;
-    var token = index;
+    const token = index;
     index = (index + 1) % MAX_RESERVATIONS;
     return token;
 }
 
-var jspmViews = {
+const jspmViews = {
     'jspm:': function (callback) {
         pluginManager.list(null, callback);
     },
     'jspm:i:(.*):': function (callback, matches) {
-        var plugin = matches[1].replace(':', '/');
+        const plugin = matches[1].replace(':', '/');
         pluginManager.install(plugin, callback);
     },
     'jspm:u:(.*):': function (callback, matches) {
-        var plugin = matches[1];
+        const plugin = matches[1];
         pluginManager.uninstall(plugin, callback);
     }
 };
 
-var pluginManager = new PluginManager();
+const pluginManager = new PluginManager();
 const jspmPlugin = new Plugin().run();
 jspmPlugin.on('check', (text, callback) => {
-    var checked = [];
+    const checked = [];
     pluginManager.ensurePluginsStarted(() => {
-        for (var regex of Object.keys(jspmViews)) {
-            var matches = new RegExp(regex).exec(text);
+        for (const regex of Object.keys(jspmViews)) {
+            const matches = new RegExp(regex).exec(text);
             if (matches && matches[0] === text) {
-                var view = jspmViews[regex];
+                const view = jspmViews[regex];
                 callback(['VIEW', reserveGetText((theCallback) => {
                     view(theCallback, matches);
                 })]);
@@ -300,7 +300,7 @@ jspmPlugin.on('check', (text, callback) => {
         }
         // console.log(pluginManager.runnings);
         var handled = false;
-        for (var plugin of pluginManager.runnings) {
+        for (const plugin of pluginManager.runnings) {
             // console.log(`start checking on ${plugin.name}`);
             plugin.check(text, (thePlugin, result) => {
                 // console.log(`${thePlugin.name} checked`);
@@ -312,11 +312,11 @@ jspmPlugin.on('check', (text, callback) => {
                     result.indexOf('VIEW ') === 0)
                 {
                     // console.log(`from ${thePlugin.name}`);
-                    var pair = result.split(' ');
-                    var token = parseInt(pair[1]);
+                    const pair = result.split(' ');
+                    const token = parseInt(pair[1]);
                     callback([pair[0], reserveGetText((theCallback) => {
                         thePlugin.gettext(token, (thePlugin, text) => {
-                            var words = text.split(' ');
+                            const words = text.split(' ');
                             words.shift(); // 先頭の TEXT を外している
                             theCallback(words.join(' '));
                         });

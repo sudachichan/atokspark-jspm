@@ -6,21 +6,6 @@ const exec = child_process.exec;
 const fs = require('fs');
 const path = require('path');
 
-var config = {
-    cwd: __dirname,
-    env: {
-        'PATH': [path.dirname(process.execPath), process.env.PATH].join(':'),
-        'https_proxy': process.env.https_proxy,
-    },
-};
-function npm(args, callback) {
-    exec(`npm ${args}`, config, callback);
-}
-
-function wrap(content) {
-    return `<html xmlns="http://www.w3.org/1999/xhtml"><body ${style.body}>${content}</body></html>`;
-}
-
 var style = css({
     body: {
         backgroundColor: 'black',
@@ -74,29 +59,6 @@ function propValue(value) {
         value = `${value}px`;
     }
     return value;
-}
-
-function renderJSON(s, title) {
-    const deps = JSON.parse(s).dependencies;
-    var items = [];
-    for (var key of Object.keys(deps)) {
-        items.push(`<tr><td ${style.td}>${key}</td><td ${style.td}>${deps[key].version}</td></tr>`);
-    }
-    return wrap(`<h2 ${style.h2}>${title}</h2>
-                    <table>
-                    <tr><th ${style.th}>プラグイン名</th><th ${style.th}>バージョン</th></tr>
-                    ${items.join('\n')}
-                    </table>`);
-}
-function listPlugins(callback, message) {
-    if (!message) {
-        message = '';
-    }
-    npm('list --json', (error, stdout, stderr) => {
-        var list = renderJSON(stdout, 'プラグイン一覧');
-        callback(`${message}
-        ${list}`);
-    });
 }
 
 // FIXME: 現状は 1 node.js プラグイン毎に 1 node.js プロセスを立ち上げるのでスケールしません。
@@ -157,7 +119,7 @@ class PluginManager {
             ready();
             return;
         }
-        npm('list --json', (error, stdout, stderr) => {
+        this.npm('list --json', (error, stdout, stderr) => {
             var deps = JSON.parse(stdout).dependencies;
             for (var name of Object.keys(deps)) {
                 if (name === 'atokspark-jsplugin') {
@@ -205,6 +167,93 @@ class PluginManager {
         }
         return false;
     }
+    list(message, callback) {
+        if (!message) {
+            message = '';
+        }
+        this.npm('list --json', (error, stdout, stderr) => {
+            var list = this.renderJSON(stdout, 'プラグイン一覧');
+            callback(`${message}
+            ${list}`);
+        });
+    }
+    renderJSON(s, title) {
+        const deps = JSON.parse(s).dependencies;
+        var items = [];
+        for (var key of Object.keys(deps)) {
+            items.push(`<tr><td ${style.td}>${key}</td><td ${style.td}>${deps[key].version}</td></tr>`);
+        }
+        return this.wrap(`<h2 ${style.h2}>${title}</h2>
+                        <table>
+                        <tr><th ${style.th}>プラグイン名</th><th ${style.th}>バージョン</th></tr>
+                        ${items.join('\n')}
+                        </table>`);
+    }
+    install(plugin, callback) {
+        if (plugin.indexOf('/') < 0) {
+            // foo/bar 形式でない場合は npm が応答を返さないので先回りしてエラーにする
+            callback(this.wrap(`<h4 ${style.h4}>${plugin}はインストールできません。"[githubユーザ名]/[githubプロジェクト名]"の形式を指定してください。</h4>`));
+        }
+        var url = `https://github.com/${plugin}.git`;
+        // console.log(url);
+        this.npm(`install --json --save ${url}`, (error, stdout, stderr) => {
+            if (error) {
+                callback(this.wrap(`<h4 ${style.h4}>${plugin}のインストールに失敗しました。</h4>
+                                <ul>
+                                    <li>プラグイン名が間違っていませんか？
+                                        <ul>
+                                            <li>https://github.com/${plugin} を確認してください。</li>
+                                        </ul>
+                                    </li>
+                                    <li>ネットワークに接続していますか？</li>
+                                    <li>プロキシ設定は行われていますか？
+                                        <ul>
+                                            <li>Macでプラグインマネージャ(jspm)のみにプロキシ設定する場合はplugin.lstでhttps_proxy環境変数を設定してコマンドを記述してください。</li>
+                                            <li>例) https_proxy=http://proxy.server:8080 path/to/node path/to/jspm.js</li>
+                                        </ul>
+                                    </li>
+                                </ul>
+                                <pre>${error}</pre>`))
+                return;
+            }
+            this.restartPlugins(() => {
+                this.list(`<h4 ${style.h4}>${plugin}をインストールしました。</h4>`, callback);
+            });
+        });
+    }
+    uninstall(plugin, callback) {
+        if (plugin === 'atokspark-jsplugin') {
+            this.list(`<h4 ${style.h4}>プラグインマネージャの動作に必要なため、${plugin}をアンインストールできません。</h4>`, callback);
+            return;
+        }
+        if (!this.isRunning(plugin)) {
+            this.list(`<h4 ${style.h4}>${plugin}はインストールされていません。</h4>`, callback);
+            return;
+        }
+        this.stopAllPlugins();
+        this.npm(`uninstall --json --save ${plugin}`, (error, stdout, stderr) => {
+            if (error) {
+                callback(this.wrap(`<pre>${error}</pre>`))
+                return;
+            }
+            this.restartPlugins(() => {
+                this.list(`<h4 ${style.h4}>${plugin}をアンインストールしました。</h4>`, callback);
+            });
+        });
+    }
+    // private methods
+    npm(args, callback) {
+        exec(`npm ${args}`, {
+            cwd: __dirname,
+            env: {
+                'PATH': [path.dirname(process.execPath), process.env.PATH].join(':'),
+                'https_proxy': process.env.https_proxy,
+            },
+        }, callback);
+    }
+    wrap(content) {
+        return `<html xmlns="http://www.w3.org/1999/xhtml"><body ${style.body}>${content}</body></html>`;
+    }
 }
 
 const MAX_RESERVATIONS = 5;
@@ -220,76 +269,22 @@ function reserveGetText(func) {
 
 var jspmViews = {
     'jspm:': function (callback) {
-        listPlugins(callback, null);
+        pluginManager.list(null, callback);
     },
     'jspm:i:(.*):': function (callback, matches) {
         var plugin = matches[1].replace(':', '/');
-        if (plugin.indexOf('/') < 0) {
-            // foo/bar 形式でない場合は npm が応答を返さないので先回りしてエラーにする
-            callback(wrap(`<h4 ${style.h4}>${plugin}はインストールできません。"[githubユーザ名]/[githubプロジェクト名]"の形式を指定してください。</h4>`));
-        }
-        var url = `https://github.com/${plugin}.git`;
-        // console.log(url);
-        npm(`install --json --save ${url}`, (error, stdout, stderr) => {
-            if (error) {
-                callback(wrap(`<h4 ${style.h4}>${plugin}のインストールに失敗しました。</h4>
-                                <ul>
-                                    <li>プラグイン名が間違っていませんか？
-                                        <ul>
-                                            <li>https://github.com/${plugin} を確認してください。</li>
-                                        </ul>
-                                    </li>
-                                    <li>ネットワークに接続していますか？</li>
-                                    <li>プロキシ設定は行われていますか？
-                                        <ul>
-                                            <li>Macでプラグインマネージャ(jspm)のみにプロキシ設定する場合はplugin.lstでhttps_proxy環境変数を設定してコマンドを記述してください。</li>
-                                            <li>例) https_proxy=http://proxy.server:8080 path/to/node path/to/jspm.js</li>
-                                        </ul>
-                                    </li>
-                                </ul>
-                                <pre>${error}</pre>
-                                <ul>
-                                    <li>${config.env.https_proxy}</li>
-                                </ul>`))
-                return;
-            }
-            pluginManager.restartPlugins(() => {
-                listPlugins(callback, `<h4 ${style.h4}>${plugin}をインストールしました。</h4>`);
-            });
-        });
+        pluginManager.install(plugin, callback);
     },
     'jspm:u:(.*):': function (callback, matches) {
         var plugin = matches[1];
-        // console.log(url);
-        if (plugin === 'atokspark-jsplugin') {
-            listPlugins(callback, `<h4 ${style.h4}>プラグインマネージャの動作に必要なため、${plugin}をアンインストールできません。</h4>`);
-            return;
-        }
-        if (!pluginManager.isRunning(plugin)) {
-            listPlugins(callback, `<h4 ${style.h4}>${plugin}はインストールされていません。</h4>`);
-            return;
-        }
-        pluginManager.stopAllPlugins();
-        npm(`uninstall --json --save ${plugin}`, (error, stdout, stderr) => {
-            if (error) {
-                callback(wrap(`<pre>${error}</pre>
-                            <ul>
-                                <li>${config.env.https_proxy}</li>
-                            </ul>`))
-                return;
-            }
-            pluginManager.restartPlugins(() => {
-                listPlugins(callback, `<h4 ${style.h4}>${plugin}をアンインストールしました。</h4>`);
-            });
-        });
+        pluginManager.uninstall(plugin, callback);
     }
 };
 
-var checked = [];
 var pluginManager = new PluginManager();
 const jspmPlugin = new Plugin().run();
 jspmPlugin.on('check', (text, callback) => {
-    checked = [];
+    var checked = [];
     pluginManager.ensurePluginsStarted(() => {
         for (var regex of Object.keys(jspmViews)) {
             var matches = new RegExp(regex).exec(text);

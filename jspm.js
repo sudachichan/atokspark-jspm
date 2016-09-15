@@ -40,6 +40,7 @@ class PluginHost {
 const nonPluginModules = [
     'atokspark-jsplugin',
     'bootstrap',
+    'express',
     'juice',
 ];
 class PluginManager {

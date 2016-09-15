@@ -7,29 +7,6 @@ const fs = require('fs');
 const juice = require('juice');
 const path = require('path');
 
-const jspmCSS = `
-    body {
-        background-color: black;
-        color: white;
-        font-family: monospace;
-    }
-    h2 {
-        border-bottom: 1px solid #99ccff;
-    }
-    h4 {
-        background-color: #003366;
-        border-radius: 0.5em;
-        padding: 1em;
-    }
-    th {
-        background-color: #336699;
-        padding: 0.5em 1em;
-    }
-    td {
-        background-color: #003366;
-        padding: 0.5em 1em;
-    }`;
-
 class PluginHost {
     constructor(name, version) {
         this.name = name;
@@ -60,7 +37,11 @@ class PluginHost {
     }
 }
 
-const nonPluginModules = ['atokspark-jsplugin', 'juice'];
+const nonPluginModules = [
+    'atokspark-jsplugin',
+    'bootstrap',
+    'juice',
+];
 class PluginManager {
     constructor() {
         this.plugins = [];
@@ -127,38 +108,48 @@ class PluginManager {
         for (const plugin of this.plugins) {
             rows.push(`<tr><td>${plugin.name}</td><td>${plugin.version}</td></tr>`);
         }
-        callback(this.wrap(`${message}
-                            <h2>プラグイン一覧</h2>
-                            <table>
-                            <tr><th>プラグイン名</th><th>バージョン</th></tr>
-                            ${rows.join('\n')}
-                            </table>`));
+        callback(this.xhtml(`
+            ${message}
+            <h3>プラグイン一覧</h3>
+            <table class="table table-striped table-bordered">
+                <thead>
+                    <tr><th>プラグイン名</th><th>バージョン</th></tr>
+                </thead>
+                <tbody>
+                    ${rows.join('\n')}
+                </tbody>
+            </table>`));
     }
     install(plugin, callback) {
         if (plugin.indexOf('/') < 0) {
             // foo/bar 形式でない場合は npm が応答を返さないので先回りしてエラーにする
-            callback(this.wrap(`<h4>${plugin}はインストールできません。"[githubユーザ名]/[githubプロジェクト名]"の形式を指定してください。</h4>`));
+            this.list(`<div class="alert alert-warning">${plugin}はインストールできません。"[githubユーザ名]/[githubプロジェクト名]"の形式を指定してください。</div>`, callback);
         }
         this.tryInstallForName(plugin, callback, () => {
             const parts = plugin.split('/');
             const atoksparkPretended = [parts[0], `atokspark-${parts[1]}`].join('/'); 
             this.tryInstallForName(atoksparkPretended, callback, (error) => {
-                callback(this.wrap(`<h4>${plugin}のインストールに失敗しました。</h4>
-                                <ul>
-                                    <li>プラグイン名が間違っていませんか？
-                                        <ul>
-                                            <li>https://github.com/${plugin} を確認してください。</li>
-                                        </ul>
-                                    </li>
-                                    <li>ネットワークに接続していますか？</li>
-                                    <li>プロキシ設定は行われていますか？
-                                        <ul>
-                                            <li>Macでプラグインマネージャ(jspm)のみにプロキシ設定する場合はplugin.lstでhttps_proxy環境変数を設定してコマンドを記述してください。</li>
-                                            <li>例) https_proxy=http://proxy.server:8080 path/to/node path/to/jspm.js</li>
-                                        </ul>
-                                    </li>
-                                </ul>
-                                <pre>${error}</pre>`))
+                this.list(`
+                    <div class="panel panel-warning">
+                        <div class="panel-heading">${plugin}のインストールに失敗しました。</div>
+                        <div class="panel-body">
+                            <ul>
+                                <li>プラグイン名が間違っていませんか？
+                                    <ul>
+                                        <li>https://github.com/${plugin} を確認してください。</li>
+                                    </ul>
+                                </li>
+                                <li>ネットワークに接続していますか？</li>
+                                <li>プロキシ設定は行われていますか？
+                                    <ul>
+                                        <li>Macでプラグインマネージャ(jspm)のみにプロキシ設定する場合はplugin.lstでhttps_proxy環境変数を設定してコマンドを記述してください。</li>
+                                        <li>例) https_proxy=http://proxy.server:8080 path/to/node path/to/jspm.js</li>
+                                    </ul>
+                                </li>
+                            </ul>
+                            <pre class="pre-scrollable">${error}</pre>
+                        </div>
+                    </div>`, callback);
             });
         });
     }
@@ -171,7 +162,7 @@ class PluginManager {
                 return;
             }
             this.restartPlugins(() => {
-                this.list(`<h4>${plugin}をインストールしました。</h4>`, callback);
+                this.list(`<div class="alert alert-success">${plugin}をインストールしました。</div>`, callback);
             });
         });
     }
@@ -179,13 +170,13 @@ class PluginManager {
         this.tryUninstallForName(plugin, callback, () => {
             const atoksparkPretended = `atokspark-${plugin}`;
             this.tryUninstallForName(atoksparkPretended, callback, () => {
-                this.list(`<h4>${plugin}はインストールされていません。</h4>`, callback);
+                this.list(`<div class="alert alert-warning">${plugin}はインストールされていません。</div>`, callback);
             });
         });
     }
     tryUninstallForName(plugin, callback, onError) {
         if (nonPluginModules.indexOf(plugin) >= 0) {
-            this.list(`<h4>プラグインマネージャの動作に必要なため、${plugin}をアンインストールできません。</h4>`, callback);
+            this.list(`<div class="alert alert-warning">プラグインマネージャの動作に必要なため、${plugin}をアンインストールできません。</div>`, callback);
             return;
         }
         if (!this.contains(plugin)) {
@@ -195,11 +186,11 @@ class PluginManager {
         this.stopPlugins();
         this.npm(`uninstall --json --save ${plugin}`, (error, stdout, stderr) => {
             if (error) {
-                callback(this.wrap(`<pre>${error}</pre>`))
+                callback(this.xhtml(`<pre class="pre-scrollable">${error}</pre>`));
                 return;
             }
             this.restartPlugins(() => {
-                this.list(`<h4>${plugin}をアンインストールしました。</h4>`, callback);
+                this.list(`<div class="alert alert-success">${plugin}をアンインストールしました。</div>`, callback);
             });
         });
     }
@@ -216,9 +207,19 @@ class PluginManager {
         }
         exec(`npm ${args}`, config, callback);
     }
-    wrap(content) {
-        return juice(`<html xmlns="http://www.w3.org/1999/xhtml"><body>${content}</body></html>`, {
-            extraCss: jspmCSS,
+    xhtml(content, callback) {
+        var bootstrapCss = fs.readFileSync(`${__dirname}/node_modules/bootstrap/dist/css/bootstrap.min.css`);
+        return juice(`
+            <html xmlns="http://www.w3.org/1999/xhtml">
+                <body>
+                    <div class="container">${content}</div>
+                </body>
+            </html>`, {
+            extraCss: `
+                ${bootstrapCss}
+                body {
+                    margin-top: 1em;
+                }`,
             xmlMode: true,
         });
     }

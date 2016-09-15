@@ -18,6 +18,7 @@
   "homepage": "https://github.com/sudachichan/atokspark-jspm#readme",
   "dependencies": {
     "atokspark-jsplugin": "git+https://github.com/sudachichan/atokspark-jsplugin.git",
+    "bootstrap": "^3.3.7",
     "juice": "^3.0.0"
   },
   "devDependencies": {}

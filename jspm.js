@@ -129,6 +129,10 @@ class PluginManager {
             const parts = plugin.split('/');
             const atoksparkPretended = [parts[0], `atokspark-${parts[1]}`].join('/'); 
             this.tryInstallForName(atoksparkPretended, callback, (error) => {
+                var detailedError = `<pre class="pre-scrollable">${error}</pre>`;
+                if (process.platform === 'win32') {
+                    detailedError = ''; // 何か失敗するので…
+                }
                 this.list(`
                     <div class="panel panel-warning">
                         <div class="panel-heading">${plugin}のインストールに失敗しました。</div>
@@ -147,7 +151,7 @@ class PluginManager {
                                     </ul>
                                 </li>
                             </ul>
-                            <pre class="pre-scrollable">${error}</pre>
+                            ${detailedError}
                         </div>
                     </div>`, callback);
             });
@@ -196,15 +200,16 @@ class PluginManager {
     }
     // private methods
     npm(args, callback) {
+        var childEnv = process.env;
+        var separator = process.platform === 'win32' ? ';' : ':';
+        childEnv['PATH'] = [path.dirname(process.execPath), process.env.PATH].join(separator);
+        if (process.env.https_proxy) {
+            childEnv['https_proxy'] = process.env.https_proxy;
+        }
         const config = {
             cwd: __dirname,
-            env: {
-                'PATH': [path.dirname(process.execPath), process.env.PATH].join(':'),
-            },
+            env: childEnv,
         };
-        if (process.env.https_proxy) {
-            config.env['https_proxy'] = process.env.https_proxy;
-        }
         exec(`npm ${args}`, config, callback);
     }
     xhtml(content, callback) {
@@ -220,6 +225,8 @@ class PluginManager {
                 body {
                     margin-top: 1em;
                 }`,
+            preserveMediaQueries: false,
+            preserveFontFaces: false,
             xmlMode: true,
         });
     }

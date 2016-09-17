@@ -7,6 +7,9 @@ const express = require('express');
 const fs = require('fs');
 const juice = require('juice');
 const path = require('path');
+const WebpackDevServer = require("webpack-dev-server");
+const webpack = require("webpack");
+
 
 class PluginHost {
     constructor(name, version) {
@@ -227,36 +230,14 @@ class PluginManager {
     }
 }
 
-const app = express();
-app.get('/', (req, res) => {
-    pluginManager.ensurePluginsStarted(() => {
-        const rows = [];
-        for (const plugin of pluginManager.plugins) {
-            rows.push(`<tr><td>${plugin.name}</td><td>${plugin.version}</td><td>インストール済</td></tr>`);
-        }
-        res.send(`
-            <html>
-                <head>
-                    <link rel="stylesheet" href="css/bootstrap.min.css" />
-                </head>
-                <body>
-                    <div class="container">
-                        <h2 class="page-header">JavaScript Plugin Manager<small> for ATOK Spark</small></h2>
-                        <table class="table table-striped table-bordered">
-                            <thead>
-                                <tr><th>プラグイン名</th><th>バージョン</th><th>状態</th></tr>
-                            </thead>
-                            <tbody>
-                                ${rows.join('\n')}
-                            </tbody>
-                        </table>
-                    </div>
-                </body>
-            </html>`);
-    });
+var config = require("./webpack.config.js");
+var compiler = webpack(config);
+var server = new WebpackDevServer(compiler, {
+    contentBase: "app",
+    publicPath: "/js/",
+    // quiet: true,
 });
-app.use('/css', express.static(`${__dirname}/node_modules/bootstrap/dist/css`));
-const server = app.listen(3000/*will be 0*/);
+server.listen(3000/*will be 0*/);
 
 const MAX_RESERVATIONS = 5;
 const reservations = [];

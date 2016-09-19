@@ -7,8 +7,8 @@ const express = require('express');
 const fs = require('fs');
 const juice = require('juice');
 const path = require('path');
-const webpack = require("webpack");
-const webpackDevMiddleware = require("webpack-dev-middleware");
+const webpack = require('webpack');
+const webpackDevMiddleware = require('webpack-dev-middleware');
 
 
 class PluginHost {
@@ -175,9 +175,10 @@ class PluginManager {
                 onError(error);
                 return;
             }
-            this.restartPlugins(() => {
-                this.list(`<div class="alert alert-success">${plugin}をインストールしました。</div>`, callback);
-            });
+            this.stopPlugins();
+            // this.restartPlugins(() => {
+            //     this.list(`<div class="alert alert-success">${plugin}をインストールしました。</div>`, callback);
+            // });
         });
     }
     uninstall(plugin, callback) {
@@ -203,9 +204,10 @@ class PluginManager {
                 callback(this.xhtml(`<pre class="pre-scrollable">${error}</pre>`));
                 return;
             }
-            this.restartPlugins(() => {
-                this.list(`<div class="alert alert-success">${plugin}をアンインストールしました。</div>`, callback);
-            });
+            this.stopPlugins();
+            // this.restartPlugins(() => {
+            //     this.list(`<div class="alert alert-success">${plugin}をアンインストールしました。</div>`, callback);
+            // });
         });
     }
     // private methods
@@ -240,14 +242,14 @@ class PluginManager {
 }
 
 const app = express();
-app.use('/', express.static('app'));
-var config = require("./webpack.config.js");
+app.use('/', express.static(`${__dirname}/app`));
+var config = require('./webpack.config.js');
 var compiler = webpack(config);
 app.use(webpackDevMiddleware(compiler, {
-    contentBase: "app",
-    publicPath: "/js/",
+    contentBase: 'app',
+    publicPath: '/js/',
     // noInfo: true,
-    // quiet: true,
+    quiet: true,
 }));
 app.get('/plugins', (req, res) => {
     pluginManager.ensurePluginsStarted(() => {
@@ -342,7 +344,7 @@ jspmPlugin.on('check', (text, callback) => {
 });
 jspmPlugin.on('gettext', (token, callback) => {
     if (token < 0 || MAX_RESERVATIONS < token) {
-        throw "無効な token です";
+        throw '無効な token です';
     }
     const reservedGetText = reservations[token];
     reservedGetText(callback);

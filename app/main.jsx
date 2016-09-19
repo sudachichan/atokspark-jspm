@@ -14,10 +14,17 @@ class PluginManager extends React.Component {
     constructor(props) {
         super(props);
         this.state = { data: [] };
+        this.reloadPlugins();
+        this.intervalTimer = setInterval(this.reloadPlugins.bind(this), 2000);
+    }
+    reloadPlugins () {
         fetch('/plugins/').then((res) => {
             return res.json();
         }).then((json) => {
             this.setState({ data: json });
+        }).catch((e) => {
+            console.log(e);
+            clearInterval(this.intervalTimer);
         });
     }
     render() {

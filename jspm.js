@@ -139,31 +139,32 @@ class PluginManager {
             // foo/bar 形式でない場合は npm が応答を返さないので先回りしてエラーにする
             this.list(`<div class="alert alert-warning">${plugin}はインストールできません。"[githubユーザ名]/[githubプロジェクト名]"の形式を指定してください。</div>`, callback);
         }
+        callback(this.xhtml(`<div class="alert alert-success">${plugin}をインストールします。</div>`));
         this.tryInstallForName(plugin, callback, () => {
             const parts = plugin.split('/');
             const atoksparkPretended = [parts[0], `atokspark-${parts[1]}`].join('/'); 
             this.tryInstallForName(atoksparkPretended, callback, (error) => {
-                this.list(`
-                    <div class="panel panel-warning">
-                        <div class="panel-heading">${plugin}のインストールに失敗しました。</div>
-                        <div class="panel-body">
-                            <ul>
-                                <li>プラグイン名が間違っていませんか？
-                                    <ul>
-                                        <li>https://github.com/${plugin} を確認してください。</li>
-                                    </ul>
-                                </li>
-                                <li>ネットワークに接続していますか？</li>
-                                <li>プロキシ設定は行われていますか？
-                                    <ul>
-                                        <li>Macでプラグインマネージャ(jspm)のみにプロキシ設定する場合はplugin.lstでhttps_proxy環境変数を設定してコマンドを記述してください。</li>
-                                        <li>例) https_proxy=http://proxy.server:8080 path/to/node path/to/jspm.js</li>
-                                    </ul>
-                                </li>
-                            </ul>
-                            <pre class="pre-scrollable">${error}</pre>
-                        </div>
-                    </div>`, callback);
+                // this.list(`
+                //     <div class="panel panel-warning">
+                //         <div class="panel-heading">${plugin}のインストールに失敗しました。</div>
+                //         <div class="panel-body">
+                //             <ul>
+                //                 <li>プラグイン名が間違っていませんか？
+                //                     <ul>
+                //                         <li>https://github.com/${plugin} を確認してください。</li>
+                //                     </ul>
+                //                 </li>
+                //                 <li>ネットワークに接続していますか？</li>
+                //                 <li>プロキシ設定は行われていますか？
+                //                     <ul>
+                //                         <li>Macでプラグインマネージャ(jspm)のみにプロキシ設定する場合はplugin.lstでhttps_proxy環境変数を設定してコマンドを記述してください。</li>
+                //                         <li>例) https_proxy=http://proxy.server:8080 path/to/node path/to/jspm.js</li>
+                //                     </ul>
+                //                 </li>
+                //             </ul>
+                //             <pre class="pre-scrollable">${error}</pre>
+                //         </div>
+                //     </div>`, callback);
             });
         });
     }
@@ -176,16 +177,14 @@ class PluginManager {
                 return;
             }
             this.stopPlugins();
-            // this.restartPlugins(() => {
-            //     this.list(`<div class="alert alert-success">${plugin}をインストールしました。</div>`, callback);
-            // });
         });
     }
     uninstall(plugin, callback) {
+        callback(this.xhtml(`<div class="alert alert-success">${plugin}をアンインストールします。</div>`));
         this.tryUninstallForName(plugin, callback, () => {
             const atoksparkPretended = `atokspark-${plugin}`;
             this.tryUninstallForName(atoksparkPretended, callback, () => {
-                this.list(`<div class="alert alert-warning">${plugin}はインストールされていません。</div>`, callback);
+                // this.list(`<div class="alert alert-warning">${plugin}はインストールされていません。</div>`, callback);
             });
         });
     }
@@ -205,9 +204,6 @@ class PluginManager {
                 return;
             }
             this.stopPlugins();
-            // this.restartPlugins(() => {
-            //     this.list(`<div class="alert alert-success">${plugin}をアンインストールしました。</div>`, callback);
-            // });
         });
     }
     // private methods

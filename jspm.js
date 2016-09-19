@@ -7,8 +7,8 @@ const express = require('express');
 const fs = require('fs');
 const juice = require('juice');
 const path = require('path');
-const WebpackDevServer = require("webpack-dev-server");
 const webpack = require("webpack");
+const webpackDevMiddleware = require("webpack-dev-middleware");
 
 
 class PluginHost {
@@ -43,9 +43,18 @@ class PluginHost {
 
 const nonPluginModules = [
     'atokspark-jsplugin',
+    'babel-core',
+    'babel-loader',
+    'babel-preset-es2015',
+    'babel-preset-react',
     'bootstrap',
     'express',
     'juice',
+    'react',
+    'react-dom',
+    'webpack',
+    'webpack-dev-server',
+    'whatwg-fetch',
 ];
 class PluginManager {
     constructor() {
@@ -230,14 +239,27 @@ class PluginManager {
     }
 }
 
+const app = express();
+app.use('/', express.static('app'));
 var config = require("./webpack.config.js");
 var compiler = webpack(config);
-var server = new WebpackDevServer(compiler, {
+app.use(webpackDevMiddleware(compiler, {
     contentBase: "app",
     publicPath: "/js/",
+    // noInfo: true,
     // quiet: true,
+}));
+app.get('/plugins', (req, res) => {
+    pluginManager.ensurePluginsStarted(() => {
+        res.json(pluginManager.plugins.map((plugin) => {
+            return {
+                name: plugin.name,
+                version: plugin.version,
+            };
+        }));
+    });
 });
-server.listen(3000/*will be 0*/);
+app.listen(3000/*will be 0*/);
 
 const MAX_RESERVATIONS = 5;
 const reservations = [];
